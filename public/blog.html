@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blog — Toolra | AI Tools Tips & Guides</title>
+<meta name="description" content="Toolra blog — tips, guides and tutorials on using AI tools, PDF tools, productivity hacks and more.">
+<meta property="og:title" content="Toolra Blog — AI Tools Tips & Guides">
+<meta property="og:url" content="https://toolra.app/blog">
+<meta name="robots" content="index, follow">
+<meta name="google-site-verification" content="IIr45Q1xQ70v0f-QuuV0GjSvaOH95LNQ3kHT076XYu0">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="sitemap" type="application/xml" href="/sitemap.xml">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Blog",
+  "name": "Toolra Blog",
+  "url": "https://toolra.app/blog",
+  "description": "Tips, guides and tutorials on AI tools, PDF tools and productivity"
+}
+</script>
+<link rel="canonical" href="https://toolra.app/blog">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0a;--bg2:#111111;--bg3:#1a1a1a;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--text:#f0ede8;--text2:#8a8580;--text3:#555250;--accent:#e8d5b0;--accent2:#c4a96b;--green:#4ade80;--blue:#60a5fa;--pink:#f472b6;--orange:#fb923c}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:14px 40px;background:rgba(10,10,10,0.88);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+.logo{font-family:'Instrument Serif',serif;font-size:22px;color:var(--accent);cursor:pointer;text-decoration:none}
+.logo span{color:var(--text2);font-style:italic}
+.nav-links{display:flex;gap:28px;list-style:none}
+.nav-links a{font-size:13px;color:var(--text2);text-decoration:none;transition:color .2s}.nav-links a:hover{color:var(--text)}
+.nav-links a.active{color:var(--accent)}
+.btn-primary{font-size:13px;font-weight:500;padding:7px 18px;border-radius:8px;border:none;background:var(--accent);color:#0a0a0a;cursor:pointer;text-decoration:none;display:inline-block}
+
+.hero{padding:80px 40px 56px;text-align:center;max-width:800px;margin:0 auto}
+.hero-badge{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:500;color:var(--accent2);border:1px solid rgba(196,169,107,0.25);border-radius:20px;padding:4px 12px;margin-bottom:26px;letter-spacing:.04em;text-transform:uppercase}
+h1{font-family:'Instrument Serif',serif;font-size:clamp(36px,5vw,56px);font-weight:400;line-height:1.1;letter-spacing:-1px;margin-bottom:16px}
+h1 em{font-style:italic;color:var(--accent)}
+.hero-sub{font-size:17px;font-weight:300;color:var(--text2);line-height:1.6}
+
+.blog-grid{max-width:1200px;margin:0 auto;padding:0 40px 80px;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:24px}
+
+.post-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:28px;cursor:pointer;transition:all .25s;text-decoration:none;display:flex;flex-direction:column;gap:14px;position:relative;overflow:hidden}
+.post-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .25s}
+.post-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+.post-card:hover::before{opacity:1}
+.post-card.pdf::before{background:radial-gradient(ellipse at top left,rgba(167,139,250,.05),transparent 60%)}
+.post-card.ai::before{background:radial-gradient(ellipse at top left,rgba(244,114,182,.05),transparent 60%)}
+.post-card.tips::before{background:radial-gradient(ellipse at top left,rgba(74,222,128,.05),transparent 60%)}
+.post-card.finance::before{background:radial-gradient(ellipse at top left,rgba(251,146,60,.05),transparent 60%)}
+
+.post-tag{font-size:10px;font-weight:600;padding:3px 8px;border-radius:6px;letter-spacing:.04em;text-transform:uppercase;display:inline-block;width:fit-content}
+.tag-pdf{background:rgba(167,139,250,.1);color:#a78bfa}
+.tag-ai{background:rgba(244,114,182,.1);color:#f472b6}
+.tag-tips{background:rgba(74,222,128,.1);color:#4ade80}
+.tag-finance{background:rgba(251,146,60,.1);color:#fb923c}
+
+.post-title{font-family:'Instrument Serif',serif;font-size:22px;font-weight:400;line-height:1.3;color:var(--text)}
+.post-excerpt{font-size:13px;color:var(--text2);line-height:1.7}
+.post-meta{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:14px;border-top:1px solid var(--border);font-size:11px;color:var(--text3)}
+.post-arrow{color:var(--text3);transition:color .2s,transform .2s;font-size:16px}
+.post-card:hover .post-arrow{color:var(--text2);transform:translateX(3px)}
+
+.section-label{font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;padding:0 40px;margin-bottom:24px;max-width:1280px;margin-left:auto;margin-right:auto}
+
+footer{border-top:1px solid var(--border);padding:28px 40px;display:flex;align-items:center;justify-content:space-between}
+.footer-left{font-size:13px;color:var(--text3)}
+.footer-links{display:flex;gap:22px}
+.footer-links a{font-size:12px;color:var(--text3);text-decoration:none;transition:color .2s}.footer-links a:hover{color:var(--text2)}
+
+@media(max-width:768px){nav{padding:12px 16px}.nav-links{display:none}.hero{padding:56px 16px 36px}.blog-grid{padding:0 16px 56px}.section-label{padding:0 16px}footer{flex-direction:column;gap:14px;text-align:center}}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="logo">Toolra<span>.ai</span></a>
+  <ul class="nav-links">
+    <li><a href="/">Tools</a></li>
+    <li><a href="/blog" class="active">Blog</a></li>
+    
+  </ul>
+  <a href="/" class="btn-primary">Try Tools Free →</a>
+</nav>
+
+<section class="hero">
+  <div class="hero-badge">📝 Toolra Blog</div>
+  <h1>Tips, guides &<br><em>productivity hacks</em></h1>
+  <p class="hero-sub">Learn how to get the most out of AI tools, PDF workflows, and online productivity.</p>
+</section>
+
+<div class="section-label">📄 FEATURED POSTS</div>
+<div class="blog-grid">
+
+  <a href="/blog/how-to-merge-pdf-free" class="post-card pdf">
+    <span class="post-tag tag-pdf">PDF Tools</span>
+    <div class="post-title">How to Merge PDF Files for Free (No Software Needed)</div>
+    <div class="post-excerpt">Combining multiple PDFs used to require expensive software. Learn how to merge PDF files instantly in your browser — no install, no signup required.</div>
+    <div class="post-meta"><span>March 2026 · 4 min read</span><span class="post-arrow">→</span></div>
+  </a>
+
+  <a href="/blog/compress-pdf-without-losing-quality" class="post-card pdf">
+    <span class="post-tag tag-pdf">PDF Tools</span>
+    <div class="post-title">Compress PDF Without Losing Quality: The Complete Guide</div>
+    <div class="post-excerpt">Large PDF files are a pain to share. Here's how to reduce PDF size while keeping your documents looking sharp — completely free.</div>
+    <div class="post-meta"><span>March 2026 · 5 min read</span><span class="post-arrow">→</span></div>
+  </a>
+
+  <a href="/blog/ai-summarizer-productivity" class="post-card ai">
+    <span class="post-tag tag-ai">AI Tools</span>
+    <div class="post-title">How AI Summarizers Save Hours Every Week</div>
+    <div class="post-excerpt">From lengthy reports to meeting notes — discover how to use AI summarization to cut reading time by 80% without missing anything important.</div>
+    <div class="post-meta"><span>March 2026 · 6 min read</span><span class="post-arrow">→</span></div>
+  </a>
+
+  <a href="/blog/pdf-to-jpg-guide" class="post-card pdf">
+    <span class="post-tag tag-pdf">PDF Tools</span>
+    <div class="post-title">PDF to JPG: How to Convert PDF Pages to Images Instantly</div>
+    <div class="post-excerpt">Need to extract images from a PDF or share pages as pictures? This guide shows the fastest way to convert any PDF page to high-quality JPG.</div>
+    <div class="post-meta"><span>March 2026 · 3 min read</span><span class="post-arrow">→</span></div>
+  </a>
+
+  <a href="/blog/free-invoice-generator" class="post-card finance">
+    <span class="post-tag tag-finance">Finance</span>
+    <div class="post-title">Create Professional Invoices for Free — No Account Needed</div>
+    <div class="post-excerpt">Freelancers and small businesses can create, customize, and download professional PDF invoices in under 60 seconds. Here's how.</div>
+    <div class="post-meta"><span>March 2026 · 4 min read</span><span class="post-arrow">→</span></div>
+  </a>
+
+  <a href="/blog/ai-email-writer-tips" class="post-card ai">
+    <span class="post-tag tag-ai">AI Tools</span>
+    <div class="post-title">Write Better Emails 10x Faster with AI</div>
+    <div class="post-excerpt">Stop staring at blank screens. Learn how to use AI email writing to draft professional, persuasive emails in seconds for any situation.</div>
+    <div class="post-meta"><span>March 2026 · 5 min read</span><span class="post-arrow">→</span></div>
+  </a>
+
+  <a href="/blog/image-compression-guide" class="post-card tips">
+    <span class="post-tag tag-tips">Tips</span>
+    <div class="post-title">Image Compression Guide: Reduce File Size Without Quality Loss</div>
+    <div class="post-excerpt">Slow-loading images hurt your website and waste storage. Learn how to compress JPG, PNG, and WebP files while keeping them looking perfect.</div>
+    <div class="post-meta"><span>March 2026 · 4 min read</span><span class="post-arrow">→</span></div>
+  </a>
+
+  <a href="/blog/qr-code-generator-guide" class="post-card tips">
+    <span class="post-tag tag-tips">Tips</span>
+    <div class="post-title">QR Codes in 2026: Everything You Need to Know</div>
+    <div class="post-excerpt">QR codes are everywhere — menus, business cards, ads. Learn how to create custom QR codes for your business, event, or personal use for free.</div>
+    <div class="post-meta"><span>March 2026 · 3 min read</span><span class="post-arrow">→</span></div>
+  </a>
+
+  <a href="/blog/crypto-pnl-calculator" class="post-card finance">
+    <span class="post-tag tag-finance">Finance</span>
+    <div class="post-title">How to Calculate Your Crypto P&L (With Hedge Positions)</div>
+    <div class="post-excerpt">Tracking profit and loss across spot and hedge positions is complex. This guide explains how to use Toolra's crypto P&L calculator for accurate results.</div>
+    <div class="post-meta"><span>March 2026 · 6 min read</span><span class="post-arrow">→</span></div>
+  </a>
+
+</div>
+
+<footer>
+  <div class="footer-left">© 2026 Toolra. All tools free to use.</div>
+  <div class="footer-links">
+    <a href="/">Tools</a>
+    <a href="/blog">Blog</a>
+    <a href="mailto:hello@toolra.app">Contact</a>
+  </div>
+</footer>
+</body>
+</html>
