@@ -37,6 +37,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.3/tesseract.min.js"></script>
@@ -4210,6 +4212,11 @@ async function handleDocxToPdf(input) {
   document.getElementById('dc2-loading').style.display = 'block';
   try {
     const arrayBuffer = await file.arrayBuffer();
+    if (typeof mammoth === 'undefined') {
+      alert('Library not loaded yet. Please wait a moment and try again.');
+      document.getElementById('dc2-loading').style.display = 'none';
+      return;
+    }
     // Use mammoth to extract text, then jsPDF to create PDF
     const result = await mammoth.extractRawText({ arrayBuffer });
     const text = result.value;
@@ -4598,12 +4605,7 @@ function runRtfToPdf(input) {
   reader.readAsText(file);
 }
 
-// Load SheetJS for Excel support
-if (typeof XLSX === 'undefined') {
-  const s = document.createElement('script');
-  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-  document.head.appendChild(s);
-}
+// XLSX loaded via script tag
 
 // ── Helpers ────────────────────────────────────────────────────────
 function selectOption(el,opt){document.querySelectorAll('.option-btn').forEach(b=>b.classList.remove('selected')); el.classList.add('selected'); selectedOption=opt;}
