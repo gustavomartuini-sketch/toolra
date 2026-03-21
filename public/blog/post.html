@@ -104,15 +104,18 @@ async function loadPost() {
       document.getElementById('post-content').innerHTML = '<p style="color:var(--text2)">Post not found. <a href="/blog" style="color:var(--accent)">Back to blog →</a></p>';
       return;
     }
-    document.getElementById('post-content').innerHTML = data.html;
+    document.getElementById('post-content').innerHTML = data.content || data.html || '';
     document.getElementById('post-meta').style.display = 'block';
     document.getElementById('post-cta').style.display = 'block';
 
     // Update page title and meta
     const h1 = document.querySelector('#post-content h1');
+    const titleText = h1 ? h1.textContent : (data.title || '');
+    if (titleText) {
+      document.getElementById('page-title').textContent = titleText + ' — Toolra';
+    }
     if (h1) {
       const title = h1.textContent;
-      document.getElementById('page-title').textContent = title + ' — Toolra';
       document.getElementById('page-desc').content = title + '. Free online tools at Toolra.app';
       document.getElementById('breadcrumb-title').textContent = title.slice(0, 40) + (title.length > 40 ? '...' : '');
       document.getElementById('canonical').href = 'https://toolra.app/blog/' + slug;
