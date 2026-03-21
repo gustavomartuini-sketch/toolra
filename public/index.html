@@ -870,6 +870,8 @@ let selectedOption = '';
 let _cBlob = null, _cvFile = null, _csvData = null, _csvChart = null, _fx = {};
 const DAILY_LIMIT_FREE = 10;
 const DAILY_LIMIT_PRO = 100;
+// Declare _currentUser early so isPro() can access it
+var _currentUser = null;
 function isPro() { 
   if (_currentUser?.tier === 'pro') return true;
   return localStorage.getItem('toolra_tier') === 'pro'; 
@@ -2931,7 +2933,7 @@ async function activateProToken() {
 const SUPA_URL = window.__SUPA_URL__ || 'https://uogvjqpykymtfrclwwfn.supabase.co';
 const SUPA_KEY = window.__SUPA_KEY__ || 'sb_publishable_VP3HosuFOSPTvTU3TndraQ_rdd2J7o5';
 let _authMode = 'register';
-let _currentUser = null;
+// _currentUser declared early above (before isPro)
 
 // Load user from localStorage on init
 function initAuth() {
@@ -2939,15 +2941,47 @@ function initAuth() {
   if (saved) {
     try {
       const session = JSON.parse(saved);
-      if (session.expires_at && Date.now() < session.expires_at * 1000) {
+      // Accept session if has token (don't check expires_at — Supabase tokens last 1hr but we refresh)
+      if (session && session.token && session.id) {
         _currentUser = session;
+        // Restore tier to localStorage
+        if (session.tier === 'pro') {
+          localStorage.setItem('toolra_tier', 'pro');
+        }
         updateNavAuth();
         updateUsageUI();
+        // Background: refresh tier from server
+        refreshTierFromServer(session);
       } else {
         localStorage.removeItem('toolra_session');
+        localStorage.removeItem('toolra_tier');
       }
-    } catch(e) { localStorage.removeItem('toolra_session'); }
+    } catch(e) { 
+      localStorage.removeItem('toolra_session'); 
+      localStorage.removeItem('toolra_tier');
+    }
   }
+}
+
+// Refresh tier from server in background
+async function refreshTierFromServer(session) {
+  if (!session?.id) return;
+  try {
+    const r = await fetch('/api/auth', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'getProfile', userId: session.id })
+    });
+    const data = await r.json();
+    if (data.tier && _currentUser) {
+      _currentUser.tier = data.tier;
+      _currentUser.pro_expires_at = data.pro_expires_at || null;
+      localStorage.setItem('toolra_session', JSON.stringify(_currentUser));
+      localStorage.setItem('toolra_tier', data.tier);
+      updateNavAuth();
+      updateUsageUI();
+    }
+  } catch(e) {}
 }
 
 function showAuthModal(mode = 'register') {
