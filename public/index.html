@@ -870,7 +870,10 @@ let selectedOption = '';
 let _cBlob = null, _cvFile = null, _csvData = null, _csvChart = null, _fx = {};
 const DAILY_LIMIT_FREE = 10;
 const DAILY_LIMIT_PRO = 100;
-function isPro() { return localStorage.getItem('toolra_tier') === 'pro'; }
+function isPro() { 
+  if (_currentUser?.tier === 'pro') return true;
+  return localStorage.getItem('toolra_tier') === 'pro'; 
+}
 
 // ── Usage tracking (localStorage) ─────────────────────────────────
 function getToday() { return new Date().toISOString().split('T')[0]; }
@@ -3032,16 +3035,33 @@ async function authSubmit() {
       return;
     }
 
-    // Save session
+    // Fetch Pro status via our API (service key, bypasses RLS)
+    let tier = 'free', pro_expires_at = null;
+    try {
+      const profileResp = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getProfile', userId: data.user.id, token: data.access_token })
+      });
+      const profileData = await profileResp.json();
+      if (profileData.tier) {
+        tier = profileData.tier;
+        pro_expires_at = profileData.pro_expires_at || null;
+      }
+    } catch(e) { console.log('Profile fetch error:', e); }
+
+    // Save session with correct tier
     const session = {
       id: data.user.id,
       email: data.user.email,
       token: data.access_token,
       refresh_token: data.refresh_token,
       expires_at: data.expires_at,
-      tier: 'free'
+      tier,
+      pro_expires_at
     };
     localStorage.setItem('toolra_session', JSON.stringify(session));
+    localStorage.setItem('toolra_tier', tier);
     _currentUser = session;
     loginSuccess(email);
   } catch(e) {
@@ -3137,12 +3157,20 @@ async function updateDropdown() {
 
   // Fetch latest usage from Supabase
   try {
-    const r = await fetch(`${SUPA_URL}/rest/v1/users?id=eq.${user.id}&select=tier,ai_requests_today,last_request_date,upgraded_at`, {
+    const r = await fetch(`${SUPA_URL}/rest/v1/users?id=eq.${user.id}&select=tier,ai_requests_today,last_request_date,upgraded_at,pro_expires_at`, {
       headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${user.token}` }
     });
     const users = await r.json();
     const profile = users[0];
     if (!profile) return;
+
+    // Sync tier from Supabase to _currentUser
+    if (_currentUser && profile.tier !== _currentUser.tier) {
+      _currentUser.tier = profile.tier;
+      _currentUser.pro_expires_at = profile.pro_expires_at || null;
+      localStorage.setItem('toolra_session', JSON.stringify(_currentUser));
+      localStorage.setItem('toolra_tier', profile.tier);
+    }
 
     const today = new Date().toISOString().split('T')[0];
     const count = profile.last_request_date === today ? profile.ai_requests_today : 0;
