@@ -872,9 +872,52 @@ const DAILY_LIMIT_FREE = 10;
 const DAILY_LIMIT_PRO = 100;
 // Declare _currentUser early so isPro() can access it
 var _currentUser = null;
+
+// ── Restore session on every page load ───────────────────────────
+(function restoreSession() {
+  const saved = localStorage.getItem('toolra_session');
+  if (!saved) {
+    // No session — clear any stale tier
+    localStorage.removeItem('toolra_tier');
+    return;
+  }
+  try {
+    const s = JSON.parse(saved);
+    if (!s?.token || !s?.id) {
+      localStorage.removeItem('toolra_session');
+      localStorage.removeItem('toolra_tier');
+      return;
+    }
+    // Restore session
+    _currentUser = s;
+    // Sync tier to localStorage
+    localStorage.setItem('toolra_tier', s.tier || 'free');
+    // Background: re-fetch real tier from server (service key bypasses RLS)
+    setTimeout(() => {
+      fetch('/api/auth', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ action: 'getProfile', userId: s.id })
+      }).then(r => r.json()).then(data => {
+        if (data.tier) {
+          _currentUser = { ..._currentUser, tier: data.tier, pro_expires_at: data.pro_expires_at || null };
+          localStorage.setItem('toolra_session', JSON.stringify(_currentUser));
+          localStorage.setItem('toolra_tier', data.tier);
+          updateNavAuth();
+          updateUsageUI();
+        }
+      }).catch(() => {});
+    }, 100);
+  } catch(e) {
+    localStorage.removeItem('toolra_session');
+    localStorage.removeItem('toolra_tier');
+  }
+})();
+
 function isPro() { 
-  if (_currentUser?.tier === 'pro') return true;
-  return localStorage.getItem('toolra_tier') === 'pro'; 
+  // ONLY trust _currentUser — never localStorage alone (prevents false pro)
+  if (!_currentUser) return false;
+  return _currentUser.tier === 'pro';
 }
 
 // ── Usage tracking (localStorage) ─────────────────────────────────
@@ -891,11 +934,21 @@ function updateUsageUI() {
   const u = getUsage();
   const pro = isPro();
   const limit = pro ? DAILY_LIMIT_PRO : DAILY_LIMIT_FREE;
+  
+  // If not logged in — show generic free message
+  if (!_currentUser) {
+    const dot = document.getElementById('usage-dot');
+    const text = document.getElementById('usage-text');
+    if (text) text.textContent = '10 requests left today';
+    if (dot) dot.className = 'usage-dot';
+    return;
+  }
+  
   const remaining = Math.max(0, limit - u.count);
   const dot = document.getElementById('usage-dot');
   const text = document.getElementById('usage-text');
-  text.textContent = pro ? `⭐ Pro · ${remaining} left` : `${remaining} requests left today`;
-  dot.className = 'usage-dot' + (remaining <= 2 ? ' limit' : remaining <= 5 ? ' warn' : '');
+  if (text) text.textContent = pro ? `⭐ Pro · ${remaining} left` : `${remaining} requests left today`;
+  if (dot) dot.className = 'usage-dot' + (remaining <= 2 ? ' limit' : remaining <= 5 ? ' warn' : '');
 }
 initAuth(); updateUsageUI();
 
@@ -1139,6 +1192,17 @@ function openSpecialTool(id) {
 }
 
 function getSpecialBody(id) {
+  // Pro-only tools — show upgrade prompt if not pro
+  const PRO_TOOLS = ['contract', 'coldemail', 'interview', 'subtitle'];
+  if (PRO_TOOLS.includes(id) && !isPro()) {
+    return `<div style="padding:32px;text-align:center">
+      <div style="font-size:48px;margin-bottom:16px">⭐</div>
+      <h3 style="font-family:'Instrument Serif',serif;font-size:22px;font-weight:400;margin-bottom:10px">Pro Feature</h3>
+      <p style="font-size:14px;color:var(--text2);margin-bottom:24px">This tool is available on the Pro plan ($12/mo).<br>Upgrade to unlock unlimited access.</p>
+      <button class="run-btn" onclick="closeModal();handleProClick()">⭐ Upgrade to Pro</button>
+      <p style="font-size:12px;color:var(--text3);margin-top:16px">Already have a token? <a href="#" onclick="closeModal();showProModal()" style="color:var(--accent)">Activate here</a></p>
+    </div>`;
+  }
   const inputStyle = `width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--text);outline:none;font-family:'DM Sans',sans-serif`;
   const label = (txt) => `<label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px">${txt}</label>`;
   const grid2 = `display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px`;
@@ -3134,6 +3198,10 @@ async function logoutUser() {
     } catch(e) {}
   }
   localStorage.removeItem('toolra_session');
+  localStorage.removeItem('toolra_tier');
+  localStorage.removeItem('toolra_usage');
+  localStorage.removeItem('toolra_tier');
+  localStorage.removeItem('toolra_usage');
   _currentUser = null;
   updateNavAuth();
   updateUsageUI();
