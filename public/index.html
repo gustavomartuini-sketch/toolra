@@ -990,10 +990,13 @@ initAuth(); updateUsageUI();
 const _XAI_KEY = 'REDACTED_USE_ENV_VAR';
 
 async function callAI(prompt, maxTokens = 1200) {
+  // Client-side pre-check (optimistic)
   const u = getUsage();
   const limit = isPro() ? DAILY_LIMIT_PRO : DAILY_LIMIT_FREE;
-  if (u.count >= limit) {
-    return { error: 'rate_limit', message: isPro() ? `Pro limit reached (${DAILY_LIMIT_PRO}/day). Contact support.` : `You've used all ${DAILY_LIMIT_FREE} free requests today. Upgrade to Pro for 100/day.` };
+  if (_currentUser && u.count >= limit) {
+    return { error: 'rate_limit', message: isPro() 
+      ? `You've used all ${DAILY_LIMIT_PRO} Pro requests today. Resets at midnight.` 
+      : `You've used all ${DAILY_LIMIT_FREE} free requests today. <a href="#" onclick="showProModal()" style="color:var(--accent)">Upgrade to Pro →</a>` };
   }
   try {
     const headers = { 'Content-Type': 'application/json' };
@@ -1005,12 +1008,23 @@ async function callAI(prompt, maxTokens = 1200) {
       body: JSON.stringify({ prompt, max_tokens: maxTokens })
     });
     const data = await r.json();
-    if (!r.ok) return { error: data.error || 'api_error', message: data.message || 'Error' };
-    const result = data.result || '';
-    incrementUsage(); updateUsageUI();
-    return { result };
+    if (r.status === 429) {
+      // Server-side rate limit hit
+      return { error: 'rate_limit', message: data.message || 'Daily limit reached.' };
+    }
+    if (!r.ok) return { error: data.error || 'api_error', message: data.message || 'Error calling AI' };
+    
+    // Update local counter with server's real count
+    if (data.usage !== undefined && data.usage !== null) {
+      const today = new Date().toISOString().split('T')[0];
+      localStorage.setItem('toolra_usage', JSON.stringify({ date: today, count: data.usage }));
+    } else {
+      incrementUsage();
+    }
+    updateUsageUI();
+    return { result: data.result || '' };
   } catch (e) {
-    return { error: 'network', message: e.message };
+    return { error: 'network', message: 'Network error. Please check your connection.' };
   }
 }
 
@@ -1047,7 +1061,7 @@ function openTool(id) {
   selectedOption = t.options[0];
   const opts = t.options.map((o,i) => `<button class="option-btn${i===0?' selected':''}" onclick="selectOption(this,'${o}')">${o}</button>`).join('');
   document.getElementById('modal-body').innerHTML = `
-    <div class="rate-banner" id="rate-banner"><strong>Daily limit reached</strong>Upgrade to Pro for 100 requests/day — <a href="#" onclick="showProModal()" style="color:var(--accent)">Go Pro →</a></div>
+    <div class="rate-banner" id="rate-banner"><span id="rate-banner-msg"><strong>Daily limit reached</strong> — <a href="#" onclick="showProModal()" style="color:var(--accent)">Upgrade to Pro for 100 requests/day →</a></span></div>
     <textarea class="text-tool-area" id="tool-input" placeholder="${t.placeholder}"></textarea>
     <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Output format</div>
     <div class="tool-options">${opts}</div>
@@ -1069,8 +1083,18 @@ async function runAITool(id) {
   btnText.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
   const { result, error, message } = await callAI(t.prompt(input, selectedOption));
   if (error) {
-    if (error === 'rate_limit') document.getElementById('rate-banner').classList.add('show');
-    document.getElementById('result-text').textContent = message || 'Something went wrong.';
+    if (error === 'rate_limit') {
+      document.getElementById('rate-banner').classList.add('show');
+      const bannerMsg = document.getElementById('rate-banner-msg');
+      if (bannerMsg) {
+        if (isPro()) {
+          bannerMsg.innerHTML = '<strong>Pro daily limit reached (100/day)</strong> — Resets at midnight UTC. Need more? <a href="mailto:hello@toolra.app" style="color:var(--accent)">Contact us</a>';
+        } else {
+          bannerMsg.innerHTML = '<strong>Free limit reached (10/day)</strong> — <a href="#" onclick="showProModal()" style="color:var(--accent)">Upgrade to Pro for 100 requests/day →</a>';
+        }
+      }
+    }
+    if (message) document.getElementById('result-text').textContent = message || 'Something went wrong.';
   } else {
     document.getElementById('result-text').textContent = result;
   }

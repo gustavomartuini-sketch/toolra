@@ -135,7 +135,9 @@ export default async function handler(req, res) {
     });
     const data = await response.json();
     if (!response.ok) return res.status(response.status).json({ error: data.error?.message || 'AI error' });
-    return res.status(200).json({ result: data.choices?.[0]?.message?.content || '' });
+    const usageCount = rateCheck ? rateCheck.current : null;
+    const usageLimit = rateCheck ? rateCheck.limit : null;
+    return res.status(200).json({ result: data.choices?.[0]?.message?.content || '', usage: usageCount, limit: usageLimit });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
