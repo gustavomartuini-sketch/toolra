@@ -3832,14 +3832,12 @@ function postOpenInit(id) {
 function handleProClick() {
   const user = getCurrentUser();
   if (!user) {
-    // Not logged in — show signup modal first, then Pro after login
     showAuthModal('register');
-    // After successful login, automatically show Pro modal
     window._afterLoginShowPro = true;
     return;
   }
-  if (user.tier === 'pro') {
-    // Already pro — show account info
+  if (isPro()) {
+    // Already Pro — open account dropdown
     toggleAccountDropdown();
     return;
   }
