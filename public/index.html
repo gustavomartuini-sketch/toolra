@@ -870,6 +870,35 @@ let selectedOption = '';
 let _cBlob = null, _cvFile = null, _csvData = null, _csvChart = null, _fx = {};
 const DAILY_LIMIT_FREE = 10;
 const DAILY_LIMIT_PRO = 100;
+
+// Device fingerprint — persists across sessions, used for guest abuse prevention
+function getDeviceId() {
+  let id = localStorage.getItem('_did');
+  if (!id) {
+    // Generate stable device ID from browser signals
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.textBaseline = 'top';
+    ctx.font = '14px Arial';
+    ctx.fillText('fingerprint', 2, 2);
+    const fp = [
+      navigator.userAgent,
+      navigator.language,
+      screen.width + 'x' + screen.height,
+      new Date().getTimezoneOffset(),
+      canvas.toDataURL().slice(-20)
+    ].join('|');
+    // Simple hash
+    let hash = 0;
+    for (let i = 0; i < fp.length; i++) {
+      hash = ((hash << 5) - hash) + fp.charCodeAt(i);
+      hash |= 0;
+    }
+    id = Math.abs(hash).toString(36) + Date.now().toString(36);
+    localStorage.setItem('_did', id);
+  }
+  return id;
+}
 // Declare _currentUser early so isPro() can access it
 var _currentUser = null;
 
@@ -1004,6 +1033,7 @@ async function callAI(prompt, maxTokens = 1200) {
     const headers = { 'Content-Type': 'application/json' };
     if (_currentUser?.id) headers['X-User-Id'] = _currentUser.id;
     if (_currentUser?.token) headers['X-User-Token'] = _currentUser.token;
+    headers['X-Device-Id'] = getDeviceId(); // abuse prevention
     const r = await fetch('/api/ai', {
       method: 'POST',
       headers,
@@ -1028,6 +1058,18 @@ async function callAI(prompt, maxTokens = 1200) {
       localStorage.setItem('toolra_usage', JSON.stringify({ date: today, count: u2.count }));
     }
     updateUsageUI();
+    // Also sync dropdown bar with real server count (no need to open dropdown)
+    if (data.usage !== undefined && data.usage !== null) {
+      const limit2 = data.limit || (isPro() ? 100 : 10);
+      const pct2 = Math.min(100, (data.usage / limit2) * 100);
+      const dtxt = document.getElementById('dropdown-usage-text');
+      const dbar = document.getElementById('dropdown-usage-bar');
+      if (dtxt) dtxt.textContent = data.usage + ' / ' + limit2;
+      if (dbar) {
+        dbar.style.width = pct2 + '%';
+        dbar.className = 'usage-bar-fill' + (pct2 >= 100 ? ' limit' : pct2 >= 70 ? ' warn' : '');
+      }
+    }
     return { result: data.result || '' };
   } catch (e) {
     return { error: 'network', message: 'Network error. Please check your connection.' };

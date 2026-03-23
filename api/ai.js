@@ -1,7 +1,8 @@
-// /api/ai.js — xAI proxy with Supabase-based rate limiting
+// /api/ai.js — xAI proxy with Supabase rate limiting + abuse protection
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
+// ── Supabase rate limit (logged-in users) ──────────────────────────────
 async function getRateLimit(userId) {
   if (!userId) return null;
   const today = new Date().toISOString().split('T')[0];
@@ -24,10 +25,9 @@ async function getRateLimit(userId) {
       body: JSON.stringify({ tier: 'free', pro_expires_at: null })
     });
     user.tier = 'free';
-    user.pro_expires_at = null;
   }
 
-  // Reset count on new day
+  // Reset on new day
   if (user.last_request_date !== today) {
     await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
       method: 'PATCH',
@@ -44,7 +44,7 @@ async function getRateLimit(userId) {
     return { allowed: false, current, limit, tier: user.tier };
   }
 
-  // Increment — do it BEFORE calling AI so we never skip a count
+  // Increment before calling AI
   const newCount = current + 1;
   await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
     method: 'PATCH',
@@ -55,30 +55,48 @@ async function getRateLimit(userId) {
   return { allowed: true, current: newCount, limit, tier: user.tier };
 }
 
-// Guest IP fallback
-const ipStore = new Map();
-function checkIpLimit(ip) {
-  const key = `${ip}::${new Date().toISOString().split('T')[0]}`;
-  const count = ipStore.get(key) || 0;
-  if (count >= 3) return false;
-  ipStore.set(key, count + 1);
-  return true;
+// ── Guest abuse protection: IP + device fingerprint ────────────────────
+// Uses in-memory store (resets on server restart, but Vercel functions are ephemeral anyway)
+// For production scale: move to KV store (Vercel KV, Upstash, etc.)
+const guestStore = new Map();
+
+function checkGuestLimit(ip, deviceId) {
+  const today = new Date().toISOString().split('T')[0];
+  const GUEST_LIMIT = 3;
+
+  // Check by IP
+  const ipKey = `ip::${ip}::${today}`;
+  const ipCount = guestStore.get(ipKey) || 0;
+  if (ipCount >= GUEST_LIMIT) return { allowed: false, reason: 'ip' };
+
+  // Check by device fingerprint (if provided)
+  if (deviceId) {
+    const devKey = `dev::${deviceId}::${today}`;
+    const devCount = guestStore.get(devKey) || 0;
+    if (devCount >= GUEST_LIMIT) return { allowed: false, reason: 'device' };
+    guestStore.set(devKey, devCount + 1);
+  }
+
+  guestStore.set(ipKey, ipCount + 1);
+  return { allowed: true, current: ipCount + 1, limit: GUEST_LIMIT };
 }
 
+// ── Main handler ───────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-User-Id, X-User-Token');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-User-Id, X-User-Token, X-Device-Id');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).end();
 
-  const userId = req.headers['x-user-id'];
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 'unknown';
+  const userId   = req.headers['x-user-id'];
+  const deviceId = req.headers['x-device-id']; // browser fingerprint
+  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
 
-  // ── Rate limit check ──
-  let rateInfo = null; // FIX: declare outside so it's always in scope
+  let rateInfo = null;
 
   if (userId && SUPABASE_URL) {
+    // Logged-in user — Supabase is source of truth
     rateInfo = await getRateLimit(userId);
     if (rateInfo && !rateInfo.allowed) {
       return res.status(429).json({
@@ -91,8 +109,9 @@ export default async function handler(req, res) {
       });
     }
   } else {
-    // Guest: IP-based limit
-    if (!checkIpLimit(ip)) {
+    // Guest — IP + device fingerprint check
+    const guestCheck = checkGuestLimit(ip, deviceId);
+    if (!guestCheck.allowed) {
       return res.status(429).json({
         error: 'rate_limit',
         message: 'Sign up free for 10 requests/day, or upgrade to Pro for 100/day.',
@@ -100,6 +119,7 @@ export default async function handler(req, res) {
         limit: 3
       });
     }
+    rateInfo = { current: guestCheck.current, limit: guestCheck.limit, tier: 'guest' };
   }
 
   const { prompt, max_tokens = 1200 } = req.body || {};
@@ -117,7 +137,6 @@ export default async function handler(req, res) {
     const data = await response.json();
     if (!response.ok) return res.status(response.status).json({ error: data.error?.message || 'AI error' });
 
-    // FIX: rateInfo is now always in scope
     return res.status(200).json({
       result: data.choices?.[0]?.message?.content || '',
       usage: rateInfo ? rateInfo.current : null,
