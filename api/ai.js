@@ -1,17 +1,78 @@
-// /api/ai.js — xAI proxy with Supabase rate limiting + abuse protection
+// /api/ai.js — xAI proxy with Supabase rate limiting + Upstash Redis abuse protection
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-// ── Supabase rate limit (logged-in users) ──────────────────────────────
+// ── Upstash Redis helpers ───────────────────────────────────────────
+async function redisCmd(...args) {
+  if (!UPSTASH_URL || !UPSTASH_TOKEN) return null;
+  try {
+    const r = await fetch(`${UPSTASH_URL}/${args.join('/')}`, {
+      headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
+    });
+    const d = await r.json();
+    return d.result;
+  } catch { return null; }
+}
+
+async function redisIncr(key) {
+  return redisCmd('INCR', encodeURIComponent(key));
+}
+
+async function redisExpire(key, seconds) {
+  return redisCmd('EXPIRE', encodeURIComponent(key), seconds);
+}
+
+async function redisGet(key) {
+  return redisCmd('GET', encodeURIComponent(key));
+}
+
+// ── Guest abuse check (IP + device fingerprint via Redis) ────────────
+async function checkGuestAbuse(ip, deviceId) {
+  const LIMIT = 3;
+  const today = new Date().toISOString().split('T')[0];
+  const secondsUntilMidnight = 86400 - (Math.floor(Date.now() / 1000) % 86400);
+
+  // Check IP
+  const ipKey = `guest:ip:${ip}:${today}`;
+  const ipCount = await redisIncr(ipKey);
+  if (ipCount === 1) await redisExpire(ipKey, secondsUntilMidnight);
+  if (ipCount > LIMIT) return { allowed: false, reason: 'ip_limit' };
+
+  // Check device fingerprint
+  if (deviceId && deviceId.length > 5) {
+    const devKey = `guest:dev:${deviceId}:${today}`;
+    const devCount = await redisIncr(devKey);
+    if (devCount === 1) await redisExpire(devKey, secondsUntilMidnight + 86400); // keep 2 days
+    if (devCount > LIMIT) return { allowed: false, reason: 'device_limit' };
+  }
+
+  return { allowed: true, current: ipCount, limit: LIMIT };
+}
+
+// Fallback in-memory (when Redis not configured)
+const memStore = new Map();
+function checkGuestMemory(ip, deviceId) {
+  const today = new Date().toISOString().split('T')[0];
+  const LIMIT = 3;
+  for (const key of [`ip:${ip}:${today}`, `dev:${deviceId}:${today}`]) {
+    if (!key.includes('undefined')) {
+      const n = (memStore.get(key) || 0) + 1;
+      memStore.set(key, n);
+      if (n > LIMIT) return { allowed: false };
+    }
+  }
+  return { allowed: true, current: 1, limit: LIMIT };
+}
+
+// ── Supabase rate limit (logged-in users) ──────────────────────────
 async function getRateLimit(userId) {
   if (!userId) return null;
   const today = new Date().toISOString().split('T')[0];
 
   const r = await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${userId}&select=tier,ai_requests_today,last_request_date,pro_expires_at`, {
-    headers: {
-      'apikey': SUPABASE_SERVICE_KEY,
-      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-    }
+    headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` }
   });
   const users = await r.json();
   let user = users[0];
@@ -39,12 +100,8 @@ async function getRateLimit(userId) {
 
   const limit = user.tier === 'pro' ? 100 : 10;
   const current = user.ai_requests_today || 0;
+  if (current >= limit) return { allowed: false, current, limit, tier: user.tier };
 
-  if (current >= limit) {
-    return { allowed: false, current, limit, tier: user.tier };
-  }
-
-  // Increment before calling AI
   const newCount = current + 1;
   await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${userId}`, {
     method: 'PATCH',
@@ -55,33 +112,7 @@ async function getRateLimit(userId) {
   return { allowed: true, current: newCount, limit, tier: user.tier };
 }
 
-// ── Guest abuse protection: IP + device fingerprint ────────────────────
-// Uses in-memory store (resets on server restart, but Vercel functions are ephemeral anyway)
-// For production scale: move to KV store (Vercel KV, Upstash, etc.)
-const guestStore = new Map();
-
-function checkGuestLimit(ip, deviceId) {
-  const today = new Date().toISOString().split('T')[0];
-  const GUEST_LIMIT = 3;
-
-  // Check by IP
-  const ipKey = `ip::${ip}::${today}`;
-  const ipCount = guestStore.get(ipKey) || 0;
-  if (ipCount >= GUEST_LIMIT) return { allowed: false, reason: 'ip' };
-
-  // Check by device fingerprint (if provided)
-  if (deviceId) {
-    const devKey = `dev::${deviceId}::${today}`;
-    const devCount = guestStore.get(devKey) || 0;
-    if (devCount >= GUEST_LIMIT) return { allowed: false, reason: 'device' };
-    guestStore.set(devKey, devCount + 1);
-  }
-
-  guestStore.set(ipKey, ipCount + 1);
-  return { allowed: true, current: ipCount + 1, limit: GUEST_LIMIT };
-}
-
-// ── Main handler ───────────────────────────────────────────────────────
+// ── Main handler ──────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -90,13 +121,12 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const userId   = req.headers['x-user-id'];
-  const deviceId = req.headers['x-device-id']; // browser fingerprint
+  const deviceId = req.headers['x-device-id'];
   const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
 
   let rateInfo = null;
 
   if (userId && SUPABASE_URL) {
-    // Logged-in user — Supabase is source of truth
     rateInfo = await getRateLimit(userId);
     if (rateInfo && !rateInfo.allowed) {
       return res.status(429).json({
@@ -109,8 +139,11 @@ export default async function handler(req, res) {
       });
     }
   } else {
-    // Guest — IP + device fingerprint check
-    const guestCheck = checkGuestLimit(ip, deviceId);
+    // Guest — use Redis if available, else in-memory
+    const guestCheck = UPSTASH_URL
+      ? await checkGuestAbuse(ip, deviceId)
+      : checkGuestMemory(ip, deviceId);
+
     if (!guestCheck.allowed) {
       return res.status(429).json({
         error: 'rate_limit',
@@ -139,9 +172,9 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       result: data.choices?.[0]?.message?.content || '',
-      usage: rateInfo ? rateInfo.current : null,
-      limit: rateInfo ? rateInfo.limit : null,
-      tier: rateInfo ? rateInfo.tier : null
+      usage: rateInfo?.current ?? null,
+      limit: rateInfo?.limit ?? null,
+      tier: rateInfo?.tier ?? null
     });
   } catch (e) {
     return res.status(500).json({ error: e.message });
