@@ -990,10 +990,12 @@ initAuth(); updateUsageUI();
 const _XAI_KEY = 'REDACTED_USE_ENV_VAR';
 
 async function callAI(prompt, maxTokens = 1200) {
-  // Client-side pre-check (optimistic)
+  // Client-side pre-check (only block if server has confirmed the limit)
+  // Let server be the source of truth — don't block based on stale localStorage
   const u = getUsage();
   const limit = isPro() ? DAILY_LIMIT_PRO : DAILY_LIMIT_FREE;
-  if (_currentUser && u.count >= limit) {
+  // Only block client-side if we're significantly over — server will enforce anyway
+  if (_currentUser && u.count > limit + 5) {
     return { error: 'rate_limit', message: isPro() 
       ? `You've used all ${DAILY_LIMIT_PRO} Pro requests today. Resets at midnight.` 
       : `You've used all ${DAILY_LIMIT_FREE} free requests today. <a href="#" onclick="showProModal()" style="color:var(--accent)">Upgrade to Pro →</a>` };
@@ -1014,12 +1016,16 @@ async function callAI(prompt, maxTokens = 1200) {
     }
     if (!r.ok) return { error: data.error || 'api_error', message: data.message || 'Error calling AI' };
     
-    // Update local counter with server's real count
+    // Sync with server's real count (always authoritative)
+    const today = new Date().toISOString().split('T')[0];
     if (data.usage !== undefined && data.usage !== null) {
-      const today = new Date().toISOString().split('T')[0];
+      // Server returned real count — use it
       localStorage.setItem('toolra_usage', JSON.stringify({ date: today, count: data.usage }));
     } else {
-      incrementUsage();
+      // Server didn't return count (guest or error) — increment locally
+      const u2 = getUsage();
+      u2.count++;
+      localStorage.setItem('toolra_usage', JSON.stringify({ date: today, count: u2.count }));
     }
     updateUsageUI();
     return { result: data.result || '' };
