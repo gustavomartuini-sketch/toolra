@@ -1,8 +1,8 @@
 // /api/ai.js — xAI proxy with Supabase rate limiting + Upstash Redis abuse protection
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL || 'https://certain-bee-82490.upstash.io';
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || 'gQAAAAAAAUI6AAIncDFiM2U3N2EwODQwYWM0NWViYWU2YzRkMTUwN2E3YTNkOXAxODI0OTA';
 
 // ── Upstash Redis helpers ───────────────────────────────────────────
 async function redisCmd(...args) {
