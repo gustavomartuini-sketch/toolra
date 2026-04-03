@@ -2523,7 +2523,8 @@ function applyWatermark(previewOnly=false){
 function loadCSV(input){Papa.parse(input.files[0],{header:true,skipEmptyLines:true,complete:r=>{_csvData=r.data; analyzeCSV();}});}
 function analyzeCSV(){
   let data=_csvData;
-  const paste=document.getElementById('csvp')?.value.trim();
+  const paste=document.getE
+lementById('csvp')?.value.trim();
   if(!data&&paste) data=Papa.parse(paste,{header:true,skipEmptyLines:true}).data;
   if(!data||!data.length){alert('Upload CSV or paste data.');return;}
   const cols=Object.keys(data[0]); const numCols=cols.filter(c=>!isNaN(parseFloat(data[0][c]))); const type=selectedOption||'bar';
@@ -3003,7 +3004,7 @@ async function payCrypto(currency) {
     const r = await fetch('/api/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currency }),
+      body: JSON.stringify({ currency, userId: getCurrentUser()?.id, userEmail: getCurrentUser()?.email }),
     });
     const data = await r.json();
     if (data.url) {
