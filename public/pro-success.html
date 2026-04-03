@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pro Activated — Toolra</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:#0a0a0a;color:#f0ede6;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{background:#141414;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:48px;max-width:480px;width:100%;text-align:center}
+.icon{font-size:56px;margin-bottom:24px}
+h1{font-family:'Instrument Serif',serif;font-size:32px;font-weight:400;margin-bottom:12px}
+.sub{color:rgba(240,237,230,.6);font-size:15px;line-height:1.6;margin-bottom:28px}
+.badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);padding:10px 20px;border-radius:100px;font-size:13px;font-weight:500;margin-bottom:24px}
+.dot{width:8px;height:8px;background:#4ade80;border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.expiry{font-size:13px;color:rgba(240,237,230,.4);margin-bottom:32px;min-height:20px}
+.btn{display:inline-block;background:#f0ede6;color:#0a0a0a;padding:14px 32px;border-radius:100px;font-size:14px;font-weight:600;text-decoration:none}
+.btn:hover{opacity:.85}
+.spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,.2);border-top-color:#f0ede6;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">⚡</div>
+  <h1>You're now Pro</h1>
+  <p class="sub">Payment received. Toolra Pro is now active on your account with unlimited AI requests.</p>
+  <div class="badge"><span class="dot"></span>Pro Plan Active</div>
+  <div class="expiry" id="expiryText"><div class="spinner"></div></div>
+  <a href="/" class="btn">Start using Pro →</a>
+</div>
+<script>
+(async function() {
+  const uid = new URLSearchParams(location.search).get('uid');
+  let session = null;
+  try { session = JSON.parse(localStorage.getItem('toolra_session')); } catch(e){}
+  const userId = uid || session?.user?.id;
+  const el = document.getElementById('expiryText');
+
+  if (!userId) { el.textContent = 'Open Toolra to verify your Pro status.'; return; }
+
+  async function check(attempt) {
+    try {
+      const r = await fetch('/api/auth', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({action:'getProfile', userId})
+      });
+      const data = await r.json();
+      if (data.tier === 'pro' && data.pro_expires_at) {
+        const exp = new Date(data.pro_expires_at);
+        el.textContent = 'Active until ' + exp.toLocaleDateString('en',{year:'numeric',month:'long',day:'numeric'});
+        if (session) {
+          session.user.tier = 'pro';
+          session.user.pro_expires_at = data.pro_expires_at;
+          localStorage.setItem('toolra_session', JSON.stringify(session));
+        }
+      } else if (attempt < 6) {
+        el.textContent = 'Verifying payment... (' + attempt + '/6)';
+        setTimeout(() => check(attempt + 1), 10000);
+      } else {
+        el.textContent = 'Payment is processing. Check your account in a few minutes.';
+      }
+    } catch(e) { el.textContent = 'Could not verify. Please refresh.'; }
+  }
+  check(1);
+})();
+</script>
+</body>
+</html>
