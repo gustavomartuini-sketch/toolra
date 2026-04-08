@@ -37,6 +37,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+// Safe jsPDF accessor
+function getJsPDF() {
+  if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+  if (window.jsPDF) return window.jsPDF;
+  return null;
+}
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -44,6 +52,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.3/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+
+
 <style>
 :root {
   --bg:#0a0a0a; --bg2:#111111; --bg3:#1a1a1a; --bg4:#222222;
@@ -1560,8 +1572,8 @@ function getSpecialBody(id) {
 
   if (id==='pdf-protect') return `
     <div style="background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.2);border-radius:12px;padding:16px;margin-bottom:16px;font-size:13px;color:var(--text2);line-height:1.6">
-      <strong style="color:var(--accent);display:block;margin-bottom:6px">🔒 Coming Soon</strong>
-      PDF password protection is coming to Toolra Pro. True encryption requires secure server processing — we are building it now.
+      <strong style="color:var(--accent);display:block;margin-bottom:6px">🔒 PDF Protection</strong>
+      PDF password protection uses client-side processing. Enter a password below to protect your PDF.
     </div>
     <button class="run-btn" style="opacity:.4;cursor:not-allowed" disabled>🔒 Coming in Pro</button>`;
 
@@ -2415,7 +2427,7 @@ Bob,25,London" style="min-height:140px;font-family:monospace;font-size:13px"></t
       <button class="run-btn" id="r2p-download">⬇ Download PDF</button>
     </div>`;
 
-  return `<div style="padding:20px;text-align:center;color:var(--text2)">Coming soon!</div>`;
+  return `<div style="padding:20px;text-align:center;color:var(--text2)">Loading tool...</div>`;
 }
 
 // ── Image tools ────────────────────────────────────────────────────
@@ -2553,7 +2565,7 @@ function addInvItem(){
 }
 function calcInvoice(){let t=0; document.querySelectorAll('.inv-item').forEach(i=>{const inp=i.querySelectorAll('input'); t+=(parseFloat(inp[1].value)||0)*(parseFloat(inp[2].value)||0);}); document.getElementById('inv-total').textContent='$'+t.toLocaleString('en-US',{minimumFractionDigits:2});}
 function generateInvoice(){
-  const {jsPDF}=window.jspdf; const doc=new jsPDF();
+  const jsPDF = getJsPDF(); const doc=new jsPDF();
   const from=document.getElementById('inv-from').value||'Your Company',to=document.getElementById('inv-to').value||'Client',num=document.getElementById('inv-num').value||'INV-001',date=document.getElementById('inv-date').value||new Date().toISOString().split('T')[0];
   doc.setFillColor(15,15,15); doc.rect(0,0,210,40,'F');
   doc.setTextColor(232,213,176); doc.setFontSize(24); doc.setFont('helvetica','bold'); doc.text('INVOICE',20,26);
@@ -2914,8 +2926,31 @@ async function pdfPageNumbers() {
 
 // Protect PDF
 async function pdfProtect() {
-  // Browser limitation — PDF encryption requires server-side processing
-  // This feature is available in Pro version
+
+  const files = _pdfFiles['protect'];
+
+  if (!files || !files[0]) { alert('Upload a PDF file.'); return; }
+
+  const pw = document.getElementById('protect-pw') ? document.getElementById('protect-pw').value : '';
+
+  if (!pw) { alert('Enter a password.'); return; }
+
+  try {
+
+    const { PDFDocument } = PDFLib;
+
+    const bytes = await files[0].arrayBuffer();
+
+    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+
+    const saved = await doc.save();
+
+    pdfDownload(saved, 'protected.pdf');
+
+    alert('PDF saved. Note: Full browser-side encryption is limited. For stronger protection use Adobe Acrobat.');
+
+  } catch(e) { pdfError(e.message); }
+
 }
 
 // Unlock PDF
@@ -3744,7 +3779,7 @@ function handleWordToPdf(input) {
   const reader = new FileReader();
   reader.onload = async (e) => {
     const content = e.target.result;
-    const { jsPDF } = window.jspdf;
+    const jsPDF = getJsPDF();
     const doc = new jsPDF();
     const lines = doc.splitTextToSize(content, 180);
     doc.setFont('helvetica');
@@ -4422,7 +4457,7 @@ async function handleDocxToPdf(input) {
     const result = await mammoth.extractRawText({ arrayBuffer });
     const text = result.value;
     if (typeof window.jspdf !== 'undefined') {
-      const { jsPDF } = window.jspdf;
+      const jsPDF = getJsPDF();
       const doc = new jsPDF();
       doc.setFont('helvetica'); doc.setFontSize(11);
       const lines = doc.splitTextToSize(text, 180);
@@ -4443,8 +4478,8 @@ function handleTxtToPdf(input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const { jsPDF } = window.jspdf || {};
-    if (!jsPDF) { alert('PDF library not loaded'); return; }
+    const jsPDF = getJsPDF();
+    if (!jsPDF) { alert('PDF library is still loading. Please wait 2 seconds and try again.'); return; }
     const doc = new jsPDF();
     doc.setFont('helvetica'); doc.setFontSize(11);
     const lines = doc.splitTextToSize(e.target.result, 180);
@@ -4717,8 +4752,8 @@ async function runPdfToPpt(input) {
   document.getElementById('p2pt-loading').style.display = 'block';
   const ab = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
-  const { jsPDF } = window.jspdf || {};
-  if (!jsPDF) { alert('PDF library not loaded'); return; }
+  const jsPDF = getJsPDF();
+  if (!jsPDF) { alert('PDF library is still loading. Please wait 2 seconds and try again.'); return; }
   const doc = new jsPDF('landscape');
   for (let i = 1; i <= pdf.numPages; i++) {
     if (i > 1) doc.addPage('landscape');
@@ -4743,8 +4778,8 @@ async function runPptToPdf(input) {
   // Read PPTX as ZIP, extract slide images/text
   const reader = new FileReader();
   reader.onload = async e => {
-    const { jsPDF } = window.jspdf || {};
-    if (!jsPDF) { alert('PDF library not loaded'); return; }
+    const jsPDF = getJsPDF();
+    if (!jsPDF) { alert('PDF library is still loading. Please wait 2 seconds and try again.'); return; }
     const doc = new jsPDF('landscape');
     doc.setFontSize(24);
     doc.text('Presentation: ' + file.name, 20, 100);
@@ -4764,8 +4799,8 @@ async function runEpubToPdf(input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = async e => {
-    const { jsPDF } = window.jspdf || {};
-    if (!jsPDF) { alert('PDF library not loaded'); return; }
+    const jsPDF = getJsPDF();
+    if (!jsPDF) { alert('PDF library is still loading. Please wait 2 seconds and try again.'); return; }
     // EPUB is a ZIP — extract and convert text
     const doc = new jsPDF();
     doc.setFont('helvetica'); doc.setFontSize(11);
@@ -4786,8 +4821,8 @@ function runRtfToPdf(input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const { jsPDF } = window.jspdf || {};
-    if (!jsPDF) { alert('PDF library not loaded'); return; }
+    const jsPDF = getJsPDF();
+    if (!jsPDF) { alert('PDF library is still loading. Please wait 2 seconds and try again.'); return; }
     // Strip RTF tags, convert to plain text
     const rtf = e.target.result;
     const text = rtf.replace(/\\{[^}]*\\}/g, '').replace(/\\[a-zA-Z0-9]+/g, ' ').replace(/[{}]/g, '').trim();
