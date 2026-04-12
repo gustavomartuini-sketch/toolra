@@ -2785,17 +2785,26 @@ async function pdfSplit() {
 
 // Compress (re-save with PDF-lib — modest reduction)
 async function pdfCompress() {
-  const files = _pdfFiles['compress'];
-  if (!files || !files[0]) { alert('Upload a PDF file.'); return; }
+  // Try DOM input first
+  const input = document.getElementById('fi-compress');
+  let file = null;
+  if (input && input.files && input.files[0]) {
+    file = input.files[0];
+    _pdfFiles['compress'] = Array.from(input.files);
+  } else if (_pdfFiles['compress'] && _pdfFiles['compress'][0] instanceof File) {
+    file = _pdfFiles['compress'][0];
+  }
+  if (!file) { alert('Please upload a PDF file first.'); return; }
   try {
     const { PDFDocument } = PDFLib;
-    const bytes = await files[0].arrayBuffer();
+    const bytes = await file.arrayBuffer();
     const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
     const saved = await doc.save({ useObjectStreams: true });
-    const orig = bytes.byteLength; const comp = saved.byteLength;
+    const orig = bytes.byteLength;
+    const comp = saved.byteLength;
     const saving = (((orig - comp) / orig) * 100).toFixed(0);
     pdfDownload(saved, 'compressed.pdf');
-    alert(`Done! ${(orig/1024/1024).toFixed(2)}MB → ${(comp/1024/1024).toFixed(2)}MB (${saving > 0 ? '−'+saving : '+'+Math.abs(saving)}%)`);
+    alert('Done! ' + (orig/1024/1024).toFixed(2) + 'MB to ' + (comp/1024/1024).toFixed(2) + 'MB (' + (saving > 0 ? '-'+saving : '+'+Math.abs(saving)) + '%)');
   } catch(e) { pdfError(e.message); }
 }
 
