@@ -2785,7 +2785,6 @@ async function pdfSplit() {
 
 // Compress (re-save with PDF-lib — modest reduction)
 async function pdfCompress() {
-  // Try DOM input first
   const input = document.getElementById('fi-compress');
   let file = null;
   if (input && input.files && input.files[0]) {
@@ -2795,12 +2794,38 @@ async function pdfCompress() {
     file = _pdfFiles['compress'][0];
   }
   if (!file) { alert('Please upload a PDF file first.'); return; }
+
+  const quality = selectedOption === 'low' ? 0.4 : selectedOption === 'medium' ? 0.65 : 0.85;
+  const scale = selectedOption === 'low' ? 1.0 : selectedOption === 'medium' ? 1.2 : 1.5;
+
   try {
+    const orig = file.size;
+    const ab = await file.arrayBuffer();
+
+    // Render each page to canvas then re-build PDF with images
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdfDoc = await pdfjsLib.getDocument({ data: ab }).promise;
     const { PDFDocument } = PDFLib;
-    const bytes = await file.arrayBuffer();
-    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-    const saved = await doc.save({ useObjectStreams: true });
-    const orig = bytes.byteLength;
+    const outDoc = await PDFDocument.create();
+
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      const page = await pdfDoc.getPage(i);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+      // Convert to JPEG
+      const imgData = canvas.toDataURL('image/jpeg', quality);
+      const base64 = imgData.split(',')[1];
+      const imgBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      const img = await outDoc.embedJpg(imgBytes);
+      const pdfPage = outDoc.addPage([viewport.width, viewport.height]);
+      pdfPage.drawImage(img, { x: 0, y: 0, width: viewport.width, height: viewport.height });
+    }
+
+    const saved = await outDoc.save();
     const comp = saved.byteLength;
     const saving = (((orig - comp) / orig) * 100).toFixed(0);
     pdfDownload(saved, 'compressed.pdf');
